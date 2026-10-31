@@ -25,6 +25,7 @@ class ScriptSpec:
     optional: tuple[str, ...] = ()
     timeout_seconds: int = 120
     confirm: bool = False
+    approval_gate: str | None = None
 
 
 # Paths passed through as --flag values. "output" is always a new artifact dir.
@@ -49,6 +50,7 @@ CATALOG: tuple[ScriptSpec, ...] = (
         required=("protocol", "output"),
         timeout_seconds=3600,
         confirm=True,
+        approval_gate="protocol",
     ),
     ScriptSpec(
         name="run_calibration_periods",
@@ -57,6 +59,7 @@ CATALOG: tuple[ScriptSpec, ...] = (
         required=("protocol", "output"),
         timeout_seconds=3600,
         confirm=True,
+        approval_gate="protocol",
     ),
     ScriptSpec(
         name="run_calibration_windows",
@@ -65,6 +68,7 @@ CATALOG: tuple[ScriptSpec, ...] = (
         required=("protocol", "output"),
         timeout_seconds=3600,
         confirm=True,
+        approval_gate="protocol",
     ),
     ScriptSpec(
         name="run_hard_negative_years",
@@ -73,6 +77,7 @@ CATALOG: tuple[ScriptSpec, ...] = (
         required=("protocol", "output"),
         timeout_seconds=3600,
         confirm=True,
+        approval_gate="protocol",
     ),
     ScriptSpec(
         name="run_v2_development",
@@ -81,6 +86,7 @@ CATALOG: tuple[ScriptSpec, ...] = (
         required=("protocol", "materialized", "output"),
         timeout_seconds=7200,
         confirm=True,
+        approval_gate="protocol",
     ),
     ScriptSpec(
         name="audit_false_alarms",
@@ -132,6 +138,7 @@ def list_scripts(policy: RepoPolicy, _: ListScriptsArgs) -> dict[str, Any]:
                 "required": list(spec.required),
                 "optional": list(spec.optional),
                 "confirm": spec.confirm,
+                "approval_gate": spec.approval_gate,
                 "timeout_seconds": spec.timeout_seconds,
                 "present": (policy.root / "scripts" / f"{spec.name}.py").is_file(),
             }
@@ -168,17 +175,22 @@ def run_script(policy: RepoPolicy, args: RunScriptArgs) -> dict[str, Any]:
         raise PolicyError(f"{spec.name} does not accept: {', '.join(extra)}.")
 
     script = policy.resolve_script(spec.name, set(_BY_NAME))
-    argv = [str(policy.interpreter()), str(script)]
     protocol_payload: dict[str, Any] | None = None
+    protocol_path = provided.get("protocol") or provided.get("config")
+    if protocol_path:
+        protocol_payload = json.loads(policy.read_text(protocol_path))
+        policy.assert_development_execution(protocol_payload)
+    if spec.approval_gate:
+        if not protocol_path:
+            raise PolicyError(f"{spec.name} needs an approved protocol path.")
+        policy.require_approval(protocol_path, spec.approval_gate)
+
+    argv = [str(policy.interpreter()), str(script)]
     for flag in (*spec.required, *spec.optional):
         value = provided.get(flag)
         if not value:
             continue
         argv.extend([f"--{flag}", str(_resolve_flag(policy, flag, value))])
-        if flag in _CONFIG_FLAGS:
-            protocol_payload = json.loads(policy.read_text(value))
-    if protocol_payload is not None:
-        policy.assert_development_execution(protocol_payload)
 
     try:
         proc = subprocess.run(
@@ -257,8 +269,8 @@ TOOLS: list[Tool] = [
         name="run_script",
         description=(
             "Run one allowlisted Helio24 script into a new artifacts/ directory. "
-            "check_evaluation_protocol does not need confirm. run and audit scripts require "
-            "confirm=true and an explicit user request. Never reuse an existing output path."
+            "check_evaluation_protocol does not need confirm. run scripts require confirm=true "
+            "and hale approve --gate protocol. Never reuse an existing output path."
         ),
         args=RunScriptArgs,
         handler=run_script,

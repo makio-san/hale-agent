@@ -6,5 +6,7 @@ __pycache__/
 build/
 dist/
 .env
+.env.*
+!.env.example
 traces/
 .DS_Store

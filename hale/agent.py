@@ -1,4 +1,7 @@
-"""Bounded tool-use loop around the Anthropic Messages API.
+"""Bounded tool-use loop.
+
+The default model is a local Ollama server. An Anthropic client can be selected
+with HALE_PROVIDER=anthropic. Both speak the same `create` shape.
 
 The loop is deliberately plain: call the model, run any requested tools
 through the registry (which applies policy), append results, repeat. It stops
@@ -60,11 +63,7 @@ class Agent:
         self.settings = settings
         self.policy = RepoPolicy(settings.target_repo, allow_test_role=settings.allow_test_role)
         self.registry = registry or default_registry()
-        if client is None:
-            import anthropic
-
-            client = anthropic.Anthropic().messages
-        self.client = client
+        self.client = client or build_client(settings)
 
     def ask(self, question: str) -> RunResult:
         messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
@@ -166,6 +165,23 @@ class Agent:
             ),
             encoding="utf-8",
         )
+
+
+def build_client(settings: Settings):
+    """Return the model client selected by settings.provider."""
+    if settings.provider == "ollama":
+        from hale.ollama import OllamaClient
+
+        return OllamaClient(settings.ollama_host)
+    if settings.provider == "anthropic":
+        try:
+            import anthropic
+        except ImportError as exc:
+            raise RuntimeError(
+                "The Anthropic extra is not installed. Run: pip install 'hale-agent[anthropic]'"
+            ) from exc
+        return anthropic.Anthropic().messages
+    raise RuntimeError(f"Unknown provider: {settings.provider}")
 
 
 def _text_of(content: Any) -> str:

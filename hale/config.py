@@ -14,7 +14,9 @@ class ConfigError(RuntimeError):
 @dataclass(frozen=True)
 class Settings:
     target_repo: Path
-    model: str = "claude-sonnet-4-5"
+    provider: str = "ollama"
+    model: str = "qwen2.5:7b"
+    ollama_host: str = "http://127.0.0.1:11434"
     max_steps: int = 12
     max_output_tokens: int = 2048
     token_budget: int = 120_000
@@ -33,10 +35,16 @@ class Settings:
         target = Path(raw).expanduser().resolve()
         if not target.is_dir():
             raise ConfigError(f"HALE_TARGET_REPO does not exist: {target}")
+        provider = env.get("HALE_PROVIDER", "ollama").strip().lower()
+        if provider not in {"ollama", "anthropic"}:
+            raise ConfigError("HALE_PROVIDER must be 'ollama' or 'anthropic'.")
+        default_model = "qwen2.5:7b" if provider == "ollama" else "claude-sonnet-4-5"
         trace = env.get("HALE_TRACE_DIR")
         return cls(
             target_repo=target,
-            model=env.get("HALE_MODEL", cls.model),
+            provider=provider,
+            model=env.get("HALE_MODEL", default_model),
+            ollama_host=env.get("HALE_OLLAMA_HOST", cls.ollama_host).rstrip("/"),
             max_steps=int(env.get("HALE_MAX_STEPS", cls.max_steps)),
             max_output_tokens=int(env.get("HALE_MAX_OUTPUT_TOKENS", cls.max_output_tokens)),
             token_budget=int(env.get("HALE_TOKEN_BUDGET", cls.token_budget)),

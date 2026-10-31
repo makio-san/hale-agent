@@ -46,7 +46,8 @@ to the model as data so it can recover and explain, never as exceptions.
 
 ## Setup
 
-Requires Python 3.11 or newer, a local Helio24 checkout and an Anthropic API key.
+Requires Python 3.11 or newer, a local Helio24 checkout and [Ollama](https://ollama.com).
+`hale ask` calls a local model. No API key is required.
 
 ```sh
 git clone https://github.com/makio-san/hale-agent
@@ -54,19 +55,24 @@ cd hale-agent
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
+ollama pull qwen2.5:7b
 export HALE_TARGET_REPO=~/path/to/helio24
-export ANTHROPIC_API_KEY=...
+hale ask "Why is experiment5 still waiting for its test run?"
 ```
 
 Optional settings:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `HALE_MODEL` | `claude-sonnet-4-5` | Model id passed to the Messages API |
+| `HALE_PROVIDER` | `ollama` | `ollama` or `anthropic` |
+| `HALE_MODEL` | `qwen2.5:7b` | Ollama model tag, or a Claude model id when the provider is anthropic |
+| `HALE_OLLAMA_HOST` | `http://127.0.0.1:11434` | Local Ollama server |
 | `HALE_MAX_STEPS` | `12` | Maximum model calls per question |
 | `HALE_TOKEN_BUDGET` | `120000` | Input plus output tokens per question |
 | `HALE_TRACE_DIR` | unset | If set, writes one JSON trace per run |
 | `HALE_ALLOW_TEST_ROLE` | unset | `1` lifts test-role redaction; for final-test reporting only |
+
+Set `HALE_PROVIDER=anthropic` and install `pip install 'hale-agent[anthropic]'` to use the Claude API instead. That path needs `ANTHROPIC_API_KEY` and is billed by Anthropic.
 
 ## Usage
 

@@ -27,10 +27,14 @@ def _settings(args: argparse.Namespace) -> Settings:
 
 def cmd_ask(args: argparse.Namespace) -> int:
     from hale.agent import Agent
+    from hale.ollama import OllamaError
 
     settings = _settings(args)
     agent = Agent(settings)
-    result = agent.ask(" ".join(args.question))
+    try:
+        result = agent.ask(" ".join(args.question))
+    except (OllamaError, RuntimeError) as exc:
+        raise SystemExit(f"hale: {exc}") from exc
     print(result.answer)
     if args.verbose:
         print(

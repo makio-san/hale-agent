@@ -3,8 +3,8 @@
 Hale is a research agent for [Helio24](https://github.com/makio-san/helio24),
 a preregistered solar flare forecasting project. It reads the project's
 protocols, reports and frozen artifacts, answers questions with file-level
-citations, and will later propose and run preregistered experiments behind
-human approval gates.
+citations, and proposes the next preregistered experiment behind human
+approval gates.
 
 The name refers to George Ellery Hale, who first measured magnetic fields in
 sunspots in 1908. Helio24 predicts flares from exactly those magnetic
@@ -30,8 +30,8 @@ exists. See [`POLICY.md`](POLICY.md).
 
 ## Status
 
-Stage 1 (read-only research memory) and Stage 2 (typed script wrappers) are
-implemented:
+Stages 1 to 3 are implemented. Hale cannot approve its own protocol or merge
+a pull request.
 
 | Tool | What it does |
 | --- | --- |
@@ -42,6 +42,11 @@ implemented:
 | `read_artifact` | Reads `report.json` keys or `metrics.csv` rows of a frozen artifact |
 | `list_scripts` | Lists the Helio24 scripts Hale may run, with required flags |
 | `run_script` | Runs one allowlisted script into a new `artifacts/<name>` directory |
+| `propose_protocol` | Writes `config/<id>-vN.json` with a frozen hypothesis and acceptance rule |
+| `interpret_result` | Accepts or rejects a run only against that frozen rule |
+| `draft_report` | Writes a new bilingual `docs/<id>.md` and `docs/<id>.tr.md` pair |
+| `register_report` | Appends one row to `docs/reports.json` |
+| `open_pull_request` | Opens a review PR; never merges |
 
 Every tool goes through `hale.policy`, which allows only the paths listed in
 `POLICY.md` and redacts reserved test sections. Policy violations are returned
@@ -75,6 +80,7 @@ Optional settings:
 | `HALE_TRACE_DIR` | unset | If set, writes one JSON trace per run |
 | `HALE_ALLOW_TEST_ROLE` | unset | `1` lifts test-role redaction; for final-test reporting only |
 | `HALE_PYTHON` | `<repo>/.venv/bin/python` | Interpreter used by `run_script` |
+| `HALE_ALLOW_GIT` | unset | `1` allows `open_pull_request` after a human pull_request approval |
 
 Set `HALE_PROVIDER=anthropic` and install `pip install 'hale-agent[anthropic]'` to use the Claude API instead. That path needs `ANTHROPIC_API_KEY` and is billed by Anthropic.
 
@@ -84,6 +90,8 @@ Set `HALE_PROVIDER=anthropic` and install `pip install 'hale-agent[anthropic]'` 
 hale experiments                 # list protocols, no model call
 hale scripts                     # list allowlisted Helio24 scripts
 hale tools                       # show the tool surface exposed to the model
+hale proposals                   # list recorded human approvals
+hale approve --gate protocol config/experiment5-v9.json
 hale ask "Why is experiment5 still waiting for its test run?"
 hale ask -v "Which hard-negative years regressed?"   # prints tool calls to stderr
 ```
@@ -99,20 +107,21 @@ pytest
 The suite builds a small Helio24-shaped fixture repository and a scripted fake
 model client, so it runs without network access or an API key. It covers path
 allowlisting, symlink escapes, test-role redaction, every tool, script
-execution into a new artifact directory, and the loop's step and token limits.
+execution into a new artifact directory, frozen acceptance rules, bilingual
+numeric parity, human approval gates, and the loop's step and token limits.
 
 ## Roadmap
 
 1. **Read-only research memory** (done). Questions answered with citations.
 2. **Typed script wrappers** (done). `check_*`, selected `run_*` and `audit_*`
    scripts run through `run_script` into a new `artifacts/` directory.
-   `run` and `audit` need `confirm=true`. Report writers that touch `docs/`
-   wait for Stage 3.
-3. **Preregistered experiment loop.** `propose_protocol` writes a new
-   `config/<id>-vN.json` with hypothesis, acceptance rule and `supersedes`;
-   a human approves; Hale runs, interprets only against the frozen rule,
-   drafts the bilingual report, runs parity checks and tests, and opens a pull
-   request; a human merges.
+   `run` needs `confirm=true` and `hale approve --gate protocol`. `audit` needs
+   `confirm=true`.
+3. **Preregistered experiment loop** (done). `propose_protocol` writes a new
+   `config/<id>-vN.json` with hypothesis, acceptance rule and `supersedes`; a
+   human approves; Hale runs, interprets only against the frozen rule, drafts
+   the bilingual report, registers it, and opens a pull request. Hale does not
+   merge. A human reviews and merges.
 4. **Replay evaluation.** Helio24's commit history is a benchmark: give Hale
    the repository as it stood before each archived decision and measure whether
    it proposes, accepts and rejects the same way, never touches the test role,

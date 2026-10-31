@@ -22,6 +22,7 @@ class Settings:
     token_budget: int = 120_000
     trace_dir: Path | None = None
     allow_test_role: bool = False
+    python: Path | None = None
     extra: dict[str, str] = field(default_factory=dict)
 
     @classmethod
@@ -50,4 +51,5 @@ class Settings:
             token_budget=int(env.get("HALE_TOKEN_BUDGET", cls.token_budget)),
             trace_dir=Path(trace).expanduser() if trace else None,
             allow_test_role=env.get("HALE_ALLOW_TEST_ROLE") == "1",
+            python=Path(env["HALE_PYTHON"]).expanduser() if env.get("HALE_PYTHON") else None,
         )

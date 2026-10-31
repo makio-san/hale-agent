@@ -20,10 +20,11 @@ from hale.config import Settings
 from hale.policy import RepoPolicy
 from hale.tools import ToolRegistry, default_registry
 
-SYSTEM_PROMPT = """You are Hale, the research memory of the Helio24 solar flare forecasting project.
+SYSTEM_PROMPT = """You are Hale, the research agent of the Helio24 solar flare forecasting project.
 
-Your job in this stage is to answer questions about the project's protocols, reports and frozen
-artifacts. You can only read; you cannot run experiments or change files.
+Stage 2: you may read protocols, reports and frozen summaries, and you may run allowlisted
+check/run/audit scripts into a brand new artifacts/ directory. You cannot edit frozen files,
+docs, or config versions in place, and you cannot open reserved test rows.
 
 Rules:
 - Ground every factual statement in a tool result and cite the repository path (and line or key)
@@ -34,6 +35,9 @@ Rules:
   an independent test result. Window counts are not event counts.
 - Reserved test sections are redacted by policy. Do not speculate about their contents or suggest
   ways to access them.
+- Call list_scripts before run_script. Prefer family=check. Set confirm=true for family=run or
+  family=audit only when the user explicitly asked to execute that named script.
+- output must be a new path of the form artifacts/<name>. Never reuse or overwrite a directory.
 - Prefer search_reports then read_document over reading whole files. Stop calling tools once you
   have enough evidence.
 - Answer in the language of the question. Keep numeric values exactly as they appear in sources."""
@@ -61,7 +65,11 @@ class Agent:
         registry: ToolRegistry | None = None,
     ) -> None:
         self.settings = settings
-        self.policy = RepoPolicy(settings.target_repo, allow_test_role=settings.allow_test_role)
+        self.policy = RepoPolicy(
+            settings.target_repo,
+            allow_test_role=settings.allow_test_role,
+            python=settings.python,
+        )
         self.registry = registry or default_registry()
         self.client = client or build_client(settings)
 

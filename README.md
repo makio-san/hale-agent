@@ -30,7 +30,8 @@ exists. See [`POLICY.md`](POLICY.md).
 
 ## Status
 
-Stage 1, read-only research memory, is implemented:
+Stage 1 (read-only research memory) and Stage 2 (typed script wrappers) are
+implemented:
 
 | Tool | What it does |
 | --- | --- |
@@ -39,6 +40,8 @@ Stage 1, read-only research memory, is implemented:
 | `search_reports` | Finds a phrase across `docs/**/*.md` with path and line number |
 | `read_document` | Reads a line range of a report or protocol |
 | `read_artifact` | Reads `report.json` keys or `metrics.csv` rows of a frozen artifact |
+| `list_scripts` | Lists the Helio24 scripts Hale may run, with required flags |
+| `run_script` | Runs one allowlisted script into a new `artifacts/<name>` directory |
 
 Every tool goes through `hale.policy`, which allows only the paths listed in
 `POLICY.md` and redacts reserved test sections. Policy violations are returned
@@ -71,6 +74,7 @@ Optional settings:
 | `HALE_TOKEN_BUDGET` | `120000` | Input plus output tokens per question |
 | `HALE_TRACE_DIR` | unset | If set, writes one JSON trace per run |
 | `HALE_ALLOW_TEST_ROLE` | unset | `1` lifts test-role redaction; for final-test reporting only |
+| `HALE_PYTHON` | `<repo>/.venv/bin/python` | Interpreter used by `run_script` |
 
 Set `HALE_PROVIDER=anthropic` and install `pip install 'hale-agent[anthropic]'` to use the Claude API instead. That path needs `ANTHROPIC_API_KEY` and is billed by Anthropic.
 
@@ -78,6 +82,7 @@ Set `HALE_PROVIDER=anthropic` and install `pip install 'hale-agent[anthropic]'` 
 
 ```sh
 hale experiments                 # list protocols, no model call
+hale scripts                     # list allowlisted Helio24 scripts
 hale tools                       # show the tool surface exposed to the model
 hale ask "Why is experiment5 still waiting for its test run?"
 hale ask -v "Which hard-negative years regressed?"   # prints tool calls to stderr
@@ -93,14 +98,16 @@ pytest
 
 The suite builds a small Helio24-shaped fixture repository and a scripted fake
 model client, so it runs without network access or an API key. It covers path
-allowlisting, symlink escapes, test-role redaction, every tool, and the loop's
-step and token limits.
+allowlisting, symlink escapes, test-role redaction, every tool, script
+execution into a new artifact directory, and the loop's step and token limits.
 
 ## Roadmap
 
 1. **Read-only research memory** (done). Questions answered with citations.
-2. **Typed script wrappers.** `run_*`, `report_*`, `audit_*` and `check_*`
-   become tools restricted to development roles and fresh output directories.
+2. **Typed script wrappers** (done). `check_*`, selected `run_*` and `audit_*`
+   scripts run through `run_script` into a new `artifacts/` directory.
+   `run` and `audit` need `confirm=true`. Report writers that touch `docs/`
+   wait for Stage 3.
 3. **Preregistered experiment loop.** `propose_protocol` writes a new
    `config/<id>-vN.json` with hypothesis, acceptance rule and `supersedes`;
    a human approves; Hale runs, interprets only against the frozen rule,

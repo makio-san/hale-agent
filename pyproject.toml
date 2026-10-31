@@ -24,5 +24,8 @@ hale = "hale.cli:main"
 [tool.setuptools.packages.find]
 include = ["hale*"]
 
+[tool.setuptools.package-data]
+hale = ["cases/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -18,6 +18,7 @@ def _policy(settings: Settings) -> RepoPolicy:
         settings.target_repo,
         allow_test_role=settings.allow_test_role,
         python=settings.python,
+        allow_git=settings.allow_git,
     )
 
 
@@ -78,6 +79,33 @@ def cmd_tools(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_approve(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    policy = _policy(settings)
+    extra = args.paths[1:] if args.gate == "pull_request" else []
+    try:
+        path = policy.write_approval(args.paths[0], args.gate, extra or None)
+    except Exception as exc:
+        raise SystemExit(f"hale: {exc}") from exc
+    print(path.relative_to(policy.root).as_posix())
+    return 0
+
+
+def cmd_proposals(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    policy = _policy(settings)
+    files = policy.iter_allowed("artifacts/hale_approvals/*.json")
+    if args.json:
+        print(json.dumps({"approvals": files}, indent=2))
+        return 0
+    if not files:
+        print("No approvals recorded.")
+        return 0
+    for rel in files:
+        print(rel)
+    return 0
+
+
 def cmd_scripts(args: argparse.Namespace) -> int:
     settings = _settings(args)
     outcome = default_registry().call(_policy(settings), "list_scripts", {})
@@ -115,6 +143,15 @@ def build_parser() -> argparse.ArgumentParser:
     scripts = sub.add_parser("scripts", help="List allowlisted Helio24 scripts.")
     scripts.add_argument("--json", action="store_true")
     scripts.set_defaults(func=cmd_scripts)
+
+    approve = sub.add_parser("approve", help="Human gate: approve a protocol or pull request file set.")
+    approve.add_argument("--gate", choices=("protocol", "pull_request"), default="protocol")
+    approve.add_argument("paths", nargs="+", help="Repository-relative files. First path keys the record.")
+    approve.set_defaults(func=cmd_approve)
+
+    proposals = sub.add_parser("proposals", help="List recorded human approvals.")
+    proposals.add_argument("--json", action="store_true")
+    proposals.set_defaults(func=cmd_proposals)
     return parser
 
 

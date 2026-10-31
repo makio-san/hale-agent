@@ -104,3 +104,29 @@ def test_reserved_test_labels_match_role_names(policy: RepoPolicy):
     assert policy.is_reserved_test_label("reserved_test_2024")
     assert not policy.is_reserved_test_label("validation")
     assert not policy.is_reserved_test_label("test", protocol_status="final_test_complete")
+
+
+def test_write_new_file_is_create_only(policy: RepoPolicy, repo: Path):
+    path = policy.write_new_file("config/demo-v3.json", '{"id": "demo", "version": 3}\n')
+    assert path == repo / "config" / "demo-v3.json"
+    with pytest.raises(PolicyError, match="already exists"):
+        policy.write_new_file("config/demo-v3.json", '{"id": "demo", "version": 3}\n')
+    with pytest.raises(PolicyError):
+        policy.write_new_file("docs/secret.txt", "nope\n")
+    with pytest.raises(PolicyError):
+        policy.write_new_file("config/demo-v2.json", "{}\n")
+
+
+def test_protocol_approval_binds_hash(policy: RepoPolicy, repo: Path):
+    recorded = policy.write_approval("config/demo-v2.json", "protocol")
+    assert recorded.name.startswith("protocol-")
+    policy.require_approval("config/demo-v2.json", "protocol")
+    (repo / "config" / "demo-v2.json").write_text('{"id": "demo", "version": 2, "edited": true}', encoding="utf-8")
+    with pytest.raises(PolicyError, match="changed after approval"):
+        policy.require_approval("config/demo-v2.json", "protocol")
+
+
+def test_git_operations_default_denied(policy: RepoPolicy):
+    with pytest.raises(PolicyError, match="HALE_ALLOW_GIT"):
+        policy.assert_git_allowed()
+    RepoPolicy(policy.root, allow_git=True).assert_git_allowed()

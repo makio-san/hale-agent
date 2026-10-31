@@ -21,6 +21,8 @@ def test_list_scripts_marks_present_wrappers(policy: RepoPolicy):
     assert names["check_evaluation_protocol"]["present"] is True
     assert names["run_walk_forward"]["confirm"] is True
     assert names["run_walk_forward"]["family"] == "run"
+    assert names["run_walk_forward"]["approval_gate"] == "protocol"
+    assert names["check_evaluation_protocol"]["approval_gate"] is None
 
 
 def test_check_evaluation_protocol_writes_preflight(repo: Path):
@@ -71,6 +73,36 @@ def test_run_family_requires_confirm(policy: RepoPolicy):
     )
     assert out["error"] == "Policy violation"
     assert "confirm=true" in out["details"]
+
+
+def test_run_family_requires_protocol_approval(policy: RepoPolicy):
+    out = invoke(
+        policy,
+        "run_script",
+        name="run_walk_forward",
+        protocol="config/demo-v2.json",
+        output="artifacts/hale_walk_forward",
+        confirm=True,
+    )
+    assert out["error"] == "Policy violation"
+    assert "not approved" in out["details"]
+    assert "hale approve --gate protocol" in out["details"]
+
+
+def test_approved_run_reaches_the_script(repo: Path):
+    policy = python_policy(repo)
+    policy.write_approval("config/demo-v2.json", "protocol")
+    out = invoke(
+        policy,
+        "run_script",
+        name="run_walk_forward",
+        protocol="config/demo-v2.json",
+        output="artifacts/hale_walk_forward",
+        confirm=True,
+    )
+    assert out["ok"], out
+    assert out["result"]["returncode"] != 0
+    assert "should not execute" in (out["result"]["stderr"] + out["result"]["stdout"])
 
 
 def test_unknown_script_is_data_error(policy: RepoPolicy):

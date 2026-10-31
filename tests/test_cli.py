@@ -15,6 +15,8 @@ def test_tools_lists_stage_one_names(capsys):
     assert "list_experiments" in out
     assert "read_artifact" in out
     assert "run_script" in out
+    assert "propose_protocol" in out
+    assert "open_pull_request" in out
 
 
 def test_scripts_lists_allowlisted_wrappers(repo, capsys):
@@ -22,3 +24,13 @@ def test_scripts_lists_allowlisted_wrappers(repo, capsys):
     out = capsys.readouterr().out
     assert "check_evaluation_protocol" in out
     assert "run_walk_forward" in out
+
+
+def test_approve_records_protocol_gate(repo, capsys):
+    assert main(["--repo", str(repo), "approve", "--gate", "protocol", "config/demo-v2.json"]) == 0
+    recorded = capsys.readouterr().out.strip()
+    assert recorded == "artifacts/hale_approvals/protocol-config__demo-v2_json.json"
+    assert (repo / recorded).is_file()
+    assert main(["--repo", str(repo), "proposals"]) == 0
+    listed = capsys.readouterr().out
+    assert recorded in listed

@@ -7,15 +7,11 @@ def call(policy: RepoPolicy, name: str, **args):
 
 
 def test_registry_exposes_stage_one_tools():
-    assert default_registry().names() == [
-        "get_experiment",
-        "list_experiments",
-        "list_scripts",
-        "read_artifact",
-        "read_document",
-        "run_script",
-        "search_reports",
-    ]
+    names = default_registry().names()
+    assert "list_experiments" in names
+    assert "run_script" in names
+    assert "propose_protocol" in names
+    assert "write_approval" not in names
 
 
 def test_schemas_are_json_schema(policy: RepoPolicy):

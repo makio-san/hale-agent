@@ -13,6 +13,14 @@ from hale.policy import RepoPolicy
 from hale.tools import default_registry
 
 
+def _policy(settings: Settings) -> RepoPolicy:
+    return RepoPolicy(
+        settings.target_repo,
+        allow_test_role=settings.allow_test_role,
+        python=settings.python,
+    )
+
+
 def _settings(args: argparse.Namespace) -> Settings:
     try:
         settings = Settings.from_env()
@@ -50,7 +58,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
 def cmd_experiments(args: argparse.Namespace) -> int:
     settings = _settings(args)
-    policy = RepoPolicy(settings.target_repo, allow_test_role=settings.allow_test_role)
+    policy = _policy(settings)
     outcome = default_registry().call(policy, "list_experiments", {})
     if not outcome["ok"]:
         print(json.dumps(outcome, indent=2), file=sys.stderr)
@@ -67,6 +75,22 @@ def cmd_experiments(args: argparse.Namespace) -> int:
 def cmd_tools(_: argparse.Namespace) -> int:
     for schema in default_registry().schemas():
         print(f"{schema['name']}\n  {schema['description']}\n")
+    return 0
+
+
+def cmd_scripts(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    outcome = default_registry().call(_policy(settings), "list_scripts", {})
+    if not outcome["ok"]:
+        print(json.dumps(outcome, indent=2), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(outcome["result"], indent=2, ensure_ascii=False))
+        return 0
+    for spec in outcome["result"]["scripts"]:
+        confirm = "confirm" if spec["confirm"] else "auto"
+        present = "yes" if spec["present"] else "missing"
+        print(f"{spec['name']:32} {spec['family']:6} {confirm:8} {present:8} {spec['description']}")
     return 0
 
 
@@ -87,6 +111,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     tools = sub.add_parser("tools", help="List the tools exposed to the model.")
     tools.set_defaults(func=cmd_tools)
+
+    scripts = sub.add_parser("scripts", help="List allowlisted Helio24 scripts.")
+    scripts.add_argument("--json", action="store_true")
+    scripts.set_defaults(func=cmd_scripts)
     return parser
 
 

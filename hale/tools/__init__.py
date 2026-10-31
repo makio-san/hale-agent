@@ -72,9 +72,9 @@ class ToolRegistry:
 
 
 def default_registry() -> ToolRegistry:
-    from hale.tools import research
+    from hale.tools import research, scripts
 
     registry = ToolRegistry()
-    for tool in research.TOOLS:
+    for tool in (*research.TOOLS, *scripts.TOOLS):
         registry.register(tool)
     return registry

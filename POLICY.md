@@ -16,7 +16,7 @@ a change to the agent and must be committed and reviewed like code.
 4. Every answer cites the file it came from. Unsupported claims are not
    answered; the agent says what is missing instead.
 
-## Stage 1 (current): read-only research memory
+## Stage 1: read-only research memory
 
 Allowed reads inside the target repository:
 
@@ -51,12 +51,34 @@ development choices are frozen. Hale treats that boundary as follows:
 - Network access other than the model API.
 - Git operations in the target repository.
 
+## Stage 2 (current): typed script wrappers
+
+Hale may run a fixed catalog of `check_*`, `run_*` and `audit_*` scripts
+through `run_script`. The catalog is code, not a prompt. A script that is
+not in the catalog is denied even if the file exists.
+
+Execution rules:
+
+- The interpreter is the target repository's `.venv/bin/python`, or
+  `HALE_PYTHON` when set.
+- `--output` must be a new directory of the form `artifacts/<name>`. Existing
+  directories are denied. Frozen artifacts are never overwritten.
+- `--config` and `--protocol` must be readable `config/*.json` files.
+- `--source`, `--materialized` and `--incumbent` must be existing
+  `artifacts/<name>` directories.
+- Protocols that set `development_data.reserved_test_rows: true` cannot be
+  executed.
+- `family=check` may run without confirmation. `family=run` and
+  `family=audit` require `confirm=true` after an explicit user request.
+- Report scripts that write under `docs/` are not wrapped in this stage.
+
+After a check run, Hale may read `artifacts/<name>/preflight.json` under the
+same reserved-test redaction rules as `report.json`.
+
 ## Later stages (not implemented)
 
-Stage 2 adds typed wrappers around `run_*`, `report_*`, `audit_*` and
-`check_*` scripts, restricted to development roles and new output
-directories. Stage 3 adds `propose_protocol`, bilingual report drafting and
-pull request creation behind two human gates: protocol approval before any
-model fits, and merge approval after review. Stage 4 replays archived
-decisions to measure whether the agent accepts and rejects the same
-candidates the human researcher did.
+Stage 3 adds `propose_protocol`, bilingual report drafting and pull request
+creation behind two human gates: protocol approval before any model fits, and
+merge approval after review. Stage 4 replays archived decisions to measure
+whether the agent accepts and rejects the same candidates the human
+researcher did.

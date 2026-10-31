@@ -131,8 +131,8 @@ and the loop's step and token limits.
    accepts and rejects the same way, keeps frozen fields, never reads the
    reserved test, and reports the published numbers exactly. `--repo` locks
    those gold values to the live Helio24 checkout. No model is called.
-5. **Report.** Publish the replay results, in Turkish and English, as a Helio24
-   research report.
+5. **Report** (done). The replay result is published as the paired Helio24
+   report `docs/hale-replay-20261031.md` and `docs/hale-replay-20261031.tr.md`.
 
 ## License
 

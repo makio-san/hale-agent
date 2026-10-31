@@ -120,7 +120,9 @@ Rules:
 - Replay does not call a model, does not approve protocols, and does not
   merge pull requests.
 
-## Later stages (not implemented)
+## Stage 5: published replay report
 
-Stage 5 publishes the replay results, in Turkish and English, as a Helio24
-research report.
+The Stage 4 score is recorded in Helio24 as `docs/hale-replay-20261031.md`
+and `docs/hale-replay-20261031.tr.md`. Hale does not edit those files.
+Numeric table cells are identical across the two editions. A passing replay
+does not authorize a new fit or reserved-test access.

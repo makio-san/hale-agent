@@ -19,6 +19,13 @@ def test_tools_lists_stage_one_names(capsys):
     assert "open_pull_request" in out
 
 
+def test_replay_lists_bundled_cases(capsys):
+    assert main(["replay", "--case", "inventory-no-self-approve"]) == 0
+    out = capsys.readouterr().out
+    assert "inventory-no-self-approve" in out
+    assert "passed" in out
+
+
 def test_scripts_lists_allowlisted_wrappers(repo, capsys):
     assert main(["--repo", str(repo), "scripts"]) == 0
     out = capsys.readouterr().out

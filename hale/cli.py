@@ -106,6 +106,32 @@ def cmd_proposals(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_replay(args: argparse.Namespace) -> int:
+    from hale.replay import run_catalog
+
+    lock_raw = getattr(args, "lock_repo", None) or args.repo
+    lock = Path(lock_raw).expanduser().resolve() if lock_raw else None
+    catalog = Path(args.catalog).expanduser().resolve() if args.catalog else None
+    try:
+        report = run_catalog(lock_repo=lock, only=args.case, catalog_path=catalog)
+    except Exception as exc:
+        raise SystemExit(f"hale: {exc}") from exc
+    payload = report.as_dict()
+    if args.output:
+        Path(args.output).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        for row in report.cases:
+            print(f"{row.id:48} {row.status}")
+        summary = report.summary
+        print(
+            f"\n{summary['passed']}/{summary['total']} passed, "
+            f"{summary['failed']} failed, {summary['skipped']} skipped"
+        )
+    return 0 if report.summary["failed"] == 0 else 1
+
+
 def cmd_scripts(args: argparse.Namespace) -> int:
     settings = _settings(args)
     outcome = default_registry().call(_policy(settings), "list_scripts", {})
@@ -152,6 +178,17 @@ def build_parser() -> argparse.ArgumentParser:
     proposals = sub.add_parser("proposals", help="List recorded human approvals.")
     proposals.add_argument("--json", action="store_true")
     proposals.set_defaults(func=cmd_proposals)
+
+    replay = sub.add_parser("replay", help="Score Hale against archived Helio24 decisions. No model call.")
+    replay.add_argument("--json", action="store_true")
+    replay.add_argument("--case", action="append", help="Run only this case id. Repeatable.")
+    replay.add_argument("--catalog", help="Alternate catalog JSON. Defaults to the bundled Helio24 set.")
+    replay.add_argument("--output", help="Write the JSON report to this path.")
+    replay.add_argument(
+        "--lock-repo",
+        help="Read-only Helio24 checkout used to lock gold numbers. Also: hale --repo PATH replay.",
+    )
+    replay.set_defaults(func=cmd_replay)
     return parser
 
 

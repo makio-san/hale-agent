@@ -78,7 +78,7 @@ Execution rules:
 After a check run, Hale may read `artifacts/<name>/preflight.json` under the
 same reserved-test redaction rules as `report.json`.
 
-## Stage 3 (current): preregistered loop with human gates
+## Stage 3: preregistered loop with human gates
 
 Hale may create new protocol versions and new bilingual reports. It may not
 approve them. Two CLI gates are the only way to unlock the next step:
@@ -102,7 +102,25 @@ Write rules:
 Approvals live in `artifacts/hale_approvals/` and bind the SHA-256 of the
 approved files. A later edit invalidates the approval.
 
+## Stage 4 (current): replay evaluation
+
+`hale replay` scores Hale against archived Helio24 decisions. It is an
+evaluator, not a model tool, and it does not widen Hale's permissions.
+
+Rules:
+
+- Each case materializes an isolated snapshot. The live Helio24 checkout is
+  not written and is not the default target.
+- The encoded tools (`interpret_result`, `propose_protocol`, `read_artifact`,
+  `run_script`) are scored against a frozen gold record: accept or reject,
+  frozen protocol fields, reserved-test denial, and exact numbers.
+- `--repo` is a read-only lock: published Helio24 files must still contain
+  the gold numbers and phrases. Missing `artifacts/` files are skipped.
+  Missing `config/` or `docs/` files fail the lock.
+- Replay does not call a model, does not approve protocols, and does not
+  merge pull requests.
+
 ## Later stages (not implemented)
 
-Stage 4 replays archived decisions to measure whether the agent accepts and
-rejects the same candidates the human researcher did.
+Stage 5 publishes the replay results, in Turkish and English, as a Helio24
+research report.

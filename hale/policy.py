@@ -7,8 +7,10 @@ touch the filesystem directly, so a policy change here applies everywhere.
 from __future__ import annotations
 
 import fnmatch
+import json
 import re
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +29,7 @@ READ_ALLOWLIST: tuple[str, ...] = (
     "artifacts/*/report.json",
     "artifacts/*/metrics.csv",
     "artifacts/*/preflight.json",
+    "artifacts/hale_approvals/*.json",
 )
 
 _TEST_KEY = re.compile(r"^(test|test_.*|reserved_test.*|final_test.*)$", re.IGNORECASE)
@@ -39,6 +42,10 @@ _TEST_KEY_EXCEPTIONS = {
 _FINAL_TEST_STATUS = re.compile(r"(final_test_complete|test_complete|test_reported)", re.IGNORECASE)
 _SCRIPT_NAME = re.compile(r"^[a-z0-9_]+$")
 _ARTIFACT_DIR = re.compile(r"^artifacts/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
+_CONFIG_WRITE = re.compile(r"^config/[a-z0-9-]+-v[1-9][0-9]*\.json$")
+_DOC_WRITE = re.compile(r"^docs/[a-z0-9-]+(?:\.tr)?\.md$")
+_APPROVAL_FILE = re.compile(r"^artifacts/hale_approvals/[a-z0-9._-]+\.json$")
+_REPORT_ID = re.compile(r"^[a-z0-9-]+$")
 
 
 def _matches(rel: str) -> bool:
@@ -50,6 +57,7 @@ class RepoPolicy:
     root: Path
     allow_test_role: bool = False
     python: Path | None = None
+    allow_git: bool = False
 
     def interpreter(self) -> Path:
         path = self.python or (self.root / ".venv" / "bin" / "python")
@@ -157,6 +165,110 @@ class RepoPolicy:
             raise PolicyError("This protocol marks reserved_test_rows; execution is denied.")
         if self.is_reserved_test_label(str(protocol.get("status") or "")):
             raise PolicyError("Protocol status addresses a reserved test role; execution is denied.")
+
+    def write_new_file(self, relative: str, content: str) -> Path:
+        """Create a new allowlisted file. Existing files are immutable."""
+        rel, candidate = self._relative(relative)
+        if not (_CONFIG_WRITE.match(rel) or _DOC_WRITE.match(rel)):
+            raise PolicyError(f"Writing {rel!r} is not permitted by POLICY.md.")
+        if candidate.exists():
+            raise PolicyError(f"{rel!r} already exists; Hale cannot overwrite frozen files.")
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        candidate.write_text(content, encoding="utf-8")
+        return candidate
+
+    def append_report_index(self, entry: dict[str, Any]) -> dict[str, Any]:
+        """Append one reports.json row; existing rows must stay byte-for-byte equal in identity."""
+        rel, path = self._relative("docs/reports.json")
+        if rel != "docs/reports.json" or not path.is_file():
+            raise PolicyError("docs/reports.json is missing or escaped the repository.")
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(catalog, list):
+            raise PolicyError("docs/reports.json must be a JSON array.")
+        report_id = entry.get("id")
+        if not isinstance(report_id, str) or not _REPORT_ID.match(report_id):
+            raise PolicyError("Report id must be a lowercase slug.")
+        if any(isinstance(row, dict) and row.get("id") == report_id for row in catalog):
+            raise PolicyError(f"Report {report_id!r} is already registered.")
+        catalog.append(entry)
+        path.write_text(json.dumps(catalog, indent=2) + "\n", encoding="utf-8")
+        return entry
+
+    def write_approval(self, target: str, gate: str, extra_files: list[str] | None = None) -> Path:
+        """Record a human approval. Tools must not call this; the CLI does."""
+        if gate not in {"protocol", "pull_request"}:
+            raise PolicyError("Approval gate must be protocol or pull_request.")
+        if gate == "protocol" and extra_files:
+            raise PolicyError("protocol approval binds one config file.")
+        files = [target, *(extra_files or [])]
+        records = []
+        for item in files:
+            rel, path = self._relative(item)
+            if not path.is_file():
+                raise FileNotFoundError(rel)
+            if gate == "protocol" and not fnmatch.fnmatchcase(rel, "config/*.json"):
+                raise PolicyError("protocol approval is limited to config/*.json.")
+            if gate == "pull_request" and not _pr_file_allowed(rel):
+                raise PolicyError(f"{rel} cannot be included in a Hale pull request.")
+            records.append({"path": rel, "sha256": sha256(path.read_bytes()).hexdigest()})
+        key = _approval_key(gate, records[0]["path"])
+        rel, candidate = self._relative(key)
+        if not _APPROVAL_FILE.match(rel):
+            raise PolicyError(f"Approval path {rel!r} is not permitted.")
+        if candidate.exists():
+            raise PolicyError(f"Approval {rel!r} already exists.")
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"gate": gate, "files": records}
+        candidate.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        return candidate
+
+    def require_approval(self, target: str, gate: str) -> dict[str, Any]:
+        rel, path = self._relative(target)
+        key = _approval_key(gate, rel)
+        try:
+            record = json.loads(self.read_text(key))
+        except FileNotFoundError as exc:
+            raise PolicyError(
+                f"{rel} is not approved for gate={gate}. Run: hale approve --gate {gate} {rel}"
+            ) from exc
+        files = record.get("files") if isinstance(record, dict) else None
+        if not isinstance(files, list):
+            raise PolicyError(f"Approval record {key} is malformed.")
+        by_path = {row.get("path"): row.get("sha256") for row in files if isinstance(row, dict)}
+        expected = by_path.get(rel)
+        actual = sha256(path.read_bytes()).hexdigest()
+        if expected != actual:
+            raise PolicyError(f"{rel} changed after approval; approve it again.")
+        return record
+
+    def require_pull_request_approval(self, files: list[str]) -> None:
+        if not files:
+            raise PolicyError("A pull request needs at least one approved file.")
+        record = self.require_approval(files[0], "pull_request")
+        approved = {
+            row.get("path"): row.get("sha256")
+            for row in record.get("files", [])
+            if isinstance(row, dict)
+        }
+        for item in files:
+            rel, path = self._relative(item)
+            if rel not in approved:
+                raise PolicyError(f"{rel} is not in the pull_request approval set.")
+            if sha256(path.read_bytes()).hexdigest() != approved[rel]:
+                raise PolicyError(f"{rel} changed after approval; approve it again.")
+
+    def assert_git_allowed(self) -> None:
+        if not self.allow_git:
+            raise PolicyError("Git operations are denied. Set HALE_ALLOW_GIT=1 after reviewing the files.")
+
+
+def _pr_file_allowed(rel: str) -> bool:
+    return bool(_CONFIG_WRITE.match(rel) or _DOC_WRITE.match(rel) or rel == "docs/reports.json")
+
+
+def _approval_key(gate: str, target: str) -> str:
+    slug = target.replace("/", "__").replace(".", "_")
+    return f"artifacts/hale_approvals/{gate}-{slug}.json"
 
 
 def _is_reserved_test_key(value: str) -> bool:

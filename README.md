@@ -30,7 +30,7 @@ exists. See [`POLICY.md`](POLICY.md).
 
 ## Status
 
-Stages 1 to 3 are implemented. Hale cannot approve its own protocol or merge
+Stages 1 to 4 are implemented. Hale cannot approve its own protocol or merge
 a pull request.
 
 | Tool | What it does |
@@ -47,6 +47,7 @@ a pull request.
 | `draft_report` | Writes a new bilingual `docs/<id>.md` and `docs/<id>.tr.md` pair |
 | `register_report` | Appends one row to `docs/reports.json` |
 | `open_pull_request` | Opens a review PR; never merges |
+| `hale replay` | Scores those tools against archived Helio24 decisions. No model call |
 
 Every tool goes through `hale.policy`, which allows only the paths listed in
 `POLICY.md` and redacts reserved test sections. Policy violations are returned
@@ -92,6 +93,8 @@ hale scripts                     # list allowlisted Helio24 scripts
 hale tools                       # show the tool surface exposed to the model
 hale proposals                   # list recorded human approvals
 hale approve --gate protocol config/experiment5-v9.json
+hale replay                      # score Hale against archived Helio24 decisions
+hale replay --lock-repo ~/path/to/helio24   # also lock gold numbers to the live checkout
 hale ask "Why is experiment5 still waiting for its test run?"
 hale ask -v "Which hard-negative years regressed?"   # prints tool calls to stderr
 ```
@@ -108,7 +111,8 @@ The suite builds a small Helio24-shaped fixture repository and a scripted fake
 model client, so it runs without network access or an API key. It covers path
 allowlisting, symlink escapes, test-role redaction, every tool, script
 execution into a new artifact directory, frozen acceptance rules, bilingual
-numeric parity, human approval gates, and the loop's step and token limits.
+numeric parity, human approval gates, replay of archived Helio24 decisions,
+and the loop's step and token limits.
 
 ## Roadmap
 
@@ -122,10 +126,11 @@ numeric parity, human approval gates, and the loop's step and token limits.
    human approves; Hale runs, interprets only against the frozen rule, drafts
    the bilingual report, registers it, and opens a pull request. Hale does not
    merge. A human reviews and merges.
-4. **Replay evaluation.** Helio24's commit history is a benchmark: give Hale
-   the repository as it stood before each archived decision and measure whether
-   it proposes, accepts and rejects the same way, never touches the test role,
-   and reports numbers that match the artifacts.
+4. **Replay evaluation** (done). `hale replay` gives Hale a snapshot of the
+   repository as it stood at each archived decision and scores whether it
+   accepts and rejects the same way, keeps frozen fields, never reads the
+   reserved test, and reports the published numbers exactly. `--repo` locks
+   those gold values to the live Helio24 checkout. No model is called.
 5. **Report.** Publish the replay results, in Turkish and English, as a Helio24
    research report.
 

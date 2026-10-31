@@ -64,3 +64,10 @@ def test_metric_paths_to_test_role_are_denied(policy: RepoPolicy, dotted: str):
 def test_metric_paths_to_development_roles_pass(policy: RepoPolicy):
     policy.check_metric_path("metrics.validation.recall")
     policy.check_metric_path("protocol.status")
+
+
+def test_reserved_test_labels_match_role_names(policy: RepoPolicy):
+    assert policy.is_reserved_test_label("test")
+    assert policy.is_reserved_test_label("reserved_test_2024")
+    assert not policy.is_reserved_test_label("validation")
+    assert not policy.is_reserved_test_label("test", protocol_status="final_test_complete")

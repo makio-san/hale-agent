@@ -30,6 +30,7 @@ def test_list_experiments_groups_versions(policy: RepoPolicy):
     assert exp["latest_version"] == 2
     assert exp["status"] == "development_selection_frozen_test_pending"
     assert exp["versions"] == ["config/demo-v1.json", "config/demo-v2.json"]
+    assert out["result"]["count"] == 1
 
 
 def test_get_experiment_returns_protocol_and_related_reports(policy: RepoPolicy):
@@ -38,6 +39,7 @@ def test_get_experiment_returns_protocol_and_related_reports(policy: RepoPolicy)
     assert out["result"]["protocol"]["supersedes"] == "config/demo-v1.json"
     assert out["result"]["protocol"]["roles"]["test"] == ["2024", "2026"]  # metadata stays readable
     assert out["result"]["related_reports"][0]["id"] == "demo-experiment"
+    assert out["result"]["evidence_files"] == ["docs/demo-experiment.md", "docs/demo-experiment.tr.md"]
 
 
 def test_search_reports_returns_locations(policy: RepoPolicy):
@@ -62,7 +64,8 @@ def test_read_artifact_redacts_test_role(policy: RepoPolicy):
     assert value["validation"] == {"recall": 0.91}
     assert value["test"].startswith("[redacted")
     rows = out["result"]["metrics"]["rows"]
-    assert rows == [{"role": "validation", "recall": "0.91"}, {"role": "test", "recall": "0.5"}]
+    assert rows == [{"role": "validation", "recall": "0.91"}]
+    assert out["result"]["metrics"]["redacted_rows"] == 1
 
 
 def test_read_artifact_denies_direct_test_path(policy: RepoPolicy):

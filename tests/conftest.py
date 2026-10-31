@@ -27,6 +27,10 @@ def repo(tmp_path: Path) -> Path:
     (tmp_path / "config" / "demo-v1.json").write_text(
         json.dumps({"id": "demo", "version": 1, "status": "design_frozen"}), encoding="utf-8"
     )
+    (tmp_path / "config" / "swan_sf_v2_sources.verified.json").write_text(
+        json.dumps({"id": "swan-sf-v2-preprint-v1-2026-10-01", "status": "verified"}),
+        encoding="utf-8",
+    )
     (tmp_path / "config" / "demo-v2.json").write_text(
         json.dumps(
             {
@@ -34,6 +38,7 @@ def repo(tmp_path: Path) -> Path:
                 "version": 2,
                 "status": "development_selection_frozen_test_pending",
                 "supersedes": "config/demo-v1.json",
+                "evidence_files": ["docs/demo-experiment.md", "docs/demo-experiment.tr.md"],
                 "roles": {"train": ["2010", "2022"], "test": ["2024", "2026"]},
             }
         ),

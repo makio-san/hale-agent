@@ -90,6 +90,14 @@ class RepoPolicy:
                     f"Metric path {dotted!r} addresses a reserved test role; denied by POLICY.md."
                 )
 
+    def is_reserved_test_label(self, value: str | None, protocol_status: str | None = None) -> bool:
+        """True when a role/split label is a reserved test section that must stay hidden."""
+        if self.allow_test_role:
+            return False
+        if protocol_status and _FINAL_TEST_STATUS.search(protocol_status):
+            return False
+        return isinstance(value, str) and bool(_TEST_KEY.match(value))
+
 
 def _redact(value: Any) -> Any:
     if isinstance(value, dict):

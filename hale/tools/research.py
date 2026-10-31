@@ -6,11 +6,12 @@ import csv
 import io
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from hale.policy import RepoPolicy
+from hale.policy import PolicyError, RepoPolicy
 from hale.tools import Tool
 
 
@@ -26,6 +27,8 @@ class ListExperimentsArgs(BaseModel):
 def _load_protocols(policy: RepoPolicy) -> list[dict[str, Any]]:
     protocols = []
     for rel in policy.iter_allowed("config/*.json"):
+        if "sources" in Path(rel).name:
+            continue
         try:
             data = json.loads(policy.read_text(rel))
         except json.JSONDecodeError:
@@ -78,14 +81,38 @@ class GetExperimentArgs(BaseModel):
 def get_experiment(policy: RepoPolicy, args: GetExperimentArgs) -> dict[str, Any]:
     data = json.loads(policy.read_text(args.path))
     reports = _load_report_index(policy)
-    related = [r for r in reports if _mentions(r, data)]
-    return {"path": args.path, "protocol": data, "related_reports": related}
+    evidence = _readable_evidence(policy, data.get("evidence_files", []))
+    related = [r for r in reports if _mentions(r, data, evidence)]
+    return {
+        "path": args.path,
+        "protocol": data,
+        "related_reports": related,
+        "evidence_files": evidence,
+    }
 
 
-def _mentions(report: dict[str, Any], protocol: dict[str, Any]) -> bool:
+def _readable_evidence(policy: RepoPolicy, evidence: Any) -> list[str]:
+    if not isinstance(evidence, list):
+        return []
+    readable: list[str] = []
+    for item in evidence:
+        if not isinstance(item, str):
+            continue
+        try:
+            policy.resolve_read(item)
+        except (PolicyError, FileNotFoundError, OSError):
+            continue
+        readable.append(item)
+    return readable
+
+
+def _mentions(report: dict[str, Any], protocol: dict[str, Any], evidence: list[str]) -> bool:
     exp_id = str(protocol.get("id", "")).lower()
     rid = str(report.get("id", "")).lower()
-    return bool(exp_id) and (exp_id in rid or rid in exp_id)
+    if exp_id and (exp_id in rid or rid in exp_id):
+        return True
+    names = {str(report.get("en", "")), str(report.get("tr", ""))}
+    return any(Path(item).name in names for item in evidence)
 
 
 # --------------------------------------------------------------------------- #
@@ -188,10 +215,21 @@ def read_artifact(policy: RepoPolicy, args: ReadArtifactArgs) -> dict[str, Any]:
             out["metrics"] = None
         else:
             reader = csv.DictReader(io.StringIO(text))
-            rows = [row for _, row in zip(range(args.metrics_rows), reader)]
-            out["metrics"] = policy.redact_reserved_test(
-                {"columns": reader.fieldnames, "rows": rows}, protocol_status=status
-            )
+            kept: list[dict[str, str]] = []
+            redacted_rows = 0
+            for row in reader:
+                if len(kept) >= args.metrics_rows:
+                    break
+                role = row.get("role") or row.get("split")
+                if policy.is_reserved_test_label(role, protocol_status=status):
+                    redacted_rows += 1
+                    continue
+                kept.append(row)
+            out["metrics"] = {
+                "columns": reader.fieldnames,
+                "rows": policy.redact_reserved_test(kept, protocol_status=status),
+                "redacted_rows": redacted_rows,
+            }
     return out
 
 

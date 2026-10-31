@@ -14,3 +14,11 @@ def test_tools_lists_stage_one_names(capsys):
     out = capsys.readouterr().out
     assert "list_experiments" in out
     assert "read_artifact" in out
+    assert "run_script" in out
+
+
+def test_scripts_lists_allowlisted_wrappers(repo, capsys):
+    assert main(["--repo", str(repo), "scripts"]) == 0
+    out = capsys.readouterr().out
+    assert "check_evaluation_protocol" in out
+    assert "run_walk_forward" in out

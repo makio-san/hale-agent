@@ -57,6 +57,30 @@ def repo(tmp_path: Path) -> Path:
         "role,recall\nvalidation,0.91\ntest,0.5\n", encoding="utf-8"
     )
     (tmp_path / "data" / "secret.csv").write_text("label\n1\n", encoding="utf-8")
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "check_evaluation_protocol.py").write_text(
+        "import argparse, json\n"
+        "from pathlib import Path\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--config', type=Path, required=True)\n"
+        "parser.add_argument('--output', type=Path, required=True)\n"
+        "args = parser.parse_args()\n"
+        "protocol = json.loads(args.config.read_text())\n"
+        "args.output.mkdir(parents=True, exist_ok=False)\n"
+        "(args.output / 'preflight.json').write_text(json.dumps({\n"
+        "    'protocol_id': protocol.get('id'),\n"
+        "    'protocol_version': protocol.get('version'),\n"
+        "    'ready_for_training': False,\n"
+        "    'final_test_allowed': False,\n"
+        "    'note': 'fixture preflight',\n"
+        "}) + '\\n')\n"
+        "print('preflight written')\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "scripts" / "run_walk_forward.py").write_text(
+        "raise SystemExit('run_walk_forward stub should not execute in tests')\n",
+        encoding="utf-8",
+    )
     return tmp_path
 
 

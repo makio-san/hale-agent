@@ -44,6 +44,13 @@ def test_reserved_test_sections_are_redacted(policy: RepoPolicy):
     assert out["metrics"]["final_test_ap"].startswith("[redacted")
 
 
+def test_permission_flags_are_not_redacted(policy: RepoPolicy):
+    payload = {"final_test_allowed": False, "test": {"recall": 0.5}}
+    out = policy.redact_reserved_test(payload)
+    assert out["final_test_allowed"] is False
+    assert out["test"].startswith("[redacted")
+
+
 def test_redaction_lifts_when_final_test_is_complete(policy: RepoPolicy):
     payload = {"test": {"recall": 0.5}}
     assert policy.redact_reserved_test(payload, protocol_status="final_test_complete") == payload
@@ -64,6 +71,32 @@ def test_metric_paths_to_test_role_are_denied(policy: RepoPolicy, dotted: str):
 def test_metric_paths_to_development_roles_pass(policy: RepoPolicy):
     policy.check_metric_path("metrics.validation.recall")
     policy.check_metric_path("protocol.status")
+
+
+def test_new_artifact_directory_must_not_exist(policy: RepoPolicy, repo: Path):
+    path = policy.resolve_new_artifact_dir("artifacts/hale_preflight_demo")
+    assert path == repo / "artifacts" / "hale_preflight_demo"
+    assert not path.exists()
+    path.mkdir()
+    with pytest.raises(PolicyError):
+        policy.resolve_new_artifact_dir("artifacts/hale_preflight_demo")
+
+
+@pytest.mark.parametrize("path", ["artifacts/../config", "docs/out", "artifacts/nested/dir", "/tmp/out"])
+def test_new_artifact_directory_rejects_escapes(policy: RepoPolicy, path: str):
+    with pytest.raises(PolicyError):
+        policy.resolve_new_artifact_dir(path)
+
+
+def test_unknown_script_is_denied(policy: RepoPolicy):
+    with pytest.raises(PolicyError):
+        policy.resolve_script("download", {"check_evaluation_protocol"})
+
+
+def test_reserved_test_rows_block_execution(policy: RepoPolicy):
+    with pytest.raises(PolicyError):
+        policy.assert_development_execution({"development_data": {"reserved_test_rows": True}})
+    policy.assert_development_execution({"status": "development_selection_frozen_test_pending"})
 
 
 def test_reserved_test_labels_match_role_names(policy: RepoPolicy):

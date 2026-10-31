@@ -10,8 +10,10 @@ def test_registry_exposes_stage_one_tools():
     assert default_registry().names() == [
         "get_experiment",
         "list_experiments",
+        "list_scripts",
         "read_artifact",
         "read_document",
+        "run_script",
         "search_reports",
     ]
 

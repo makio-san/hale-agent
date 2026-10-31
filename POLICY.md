@@ -25,7 +25,8 @@ Allowed reads inside the target repository:
 | `README.md`, `AGENTS.md` | Project status and conventions |
 | `docs/**/*.md`, `docs/reports.json` | Protocols, reports and the bilingual index |
 | `config/*.json` | Versioned experiment protocols |
-| `artifacts/*/report.json`, `artifacts/*/metrics.csv` | Frozen summary outputs |
+| `artifacts/*/report.json`, `artifacts/*/metrics.csv`, `artifacts/*/preflight.json` | Frozen summary outputs |
+| `artifacts/hale_approvals/*.json` | Human gate records written by `hale approve` |
 
 Everything else is denied, including `data/`, raw Parquet or CSV rows,
 notebooks, model files, environment files and anything outside the repository
@@ -51,7 +52,7 @@ development choices are frozen. Hale treats that boundary as follows:
 - Network access other than the model API.
 - Git operations in the target repository.
 
-## Stage 2 (current): typed script wrappers
+## Stage 2: typed script wrappers
 
 Hale may run a fixed catalog of `check_*`, `run_*` and `audit_*` scripts
 through `run_script`. The catalog is code, not a prompt. A script that is
@@ -68,17 +69,40 @@ Execution rules:
   `artifacts/<name>` directories.
 - Protocols that set `development_data.reserved_test_rows: true` cannot be
   executed.
-- `family=check` may run without confirmation. `family=run` and
-  `family=audit` require `confirm=true` after an explicit user request.
-- Report scripts that write under `docs/` are not wrapped in this stage.
+- `family=check` may run without confirmation. `family=run` requires
+  `confirm=true` and a human protocol approval. `family=audit` requires
+  `confirm=true`.
+- Report scripts that write under `docs/` are not wrapped here; Stage 3
+  drafts new report files instead.
 
 After a check run, Hale may read `artifacts/<name>/preflight.json` under the
 same reserved-test redaction rules as `report.json`.
 
+## Stage 3 (current): preregistered loop with human gates
+
+Hale may create new protocol versions and new bilingual reports. It may not
+approve them. Two CLI gates are the only way to unlock the next step:
+
+```sh
+hale approve --gate protocol config/<id>-vN.json
+hale approve --gate pull_request config/<id>-vN.json docs/<id>.md docs/<id>.tr.md
+```
+
+Write rules:
+
+- New files only: `config/<id>-v<N>.json`, `docs/<slug>.md`, `docs/<slug>.tr.md`.
+- `docs/reports.json` may gain a new row. Existing rows cannot change.
+- Frozen protocol fields cannot be altered in a proposal: roles, data
+  contract, label inventory, measurement contract, development selection.
+- `acceptance_rule` is frozen at propose time. `interpret_result` uses that
+  rule only. A failed rule is a rejection.
+- `open_pull_request` needs `HALE_ALLOW_GIT=1`, a pull_request approval, and
+  `confirm=true`. It never merges.
+
+Approvals live in `artifacts/hale_approvals/` and bind the SHA-256 of the
+approved files. A later edit invalidates the approval.
+
 ## Later stages (not implemented)
 
-Stage 3 adds `propose_protocol`, bilingual report drafting and pull request
-creation behind two human gates: protocol approval before any model fits, and
-merge approval after review. Stage 4 replays archived decisions to measure
-whether the agent accepts and rejects the same candidates the human
-researcher did.
+Stage 4 replays archived decisions to measure whether the agent accepts and
+rejects the same candidates the human researcher did.

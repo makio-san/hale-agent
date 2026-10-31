@@ -40,6 +40,8 @@ development choices are frozen. Hale treats that boundary as follows:
 - Any artifact section keyed as a test role result (`test`, `test_*`,
   `reserved_test*`, `final_test*`) is denied unless the owning protocol's
   `status` declares the final test complete.
+- Rows in `metrics.csv` whose `role` or `split` column is a reserved test
+  label are omitted from tool results under the same rule.
 - The agent may not run, request or suggest any command that reads test rows.
 
 ### Not allowed in Stage 1
